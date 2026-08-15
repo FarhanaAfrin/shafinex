@@ -93,6 +93,21 @@ networth_value(
 -- the workbook's Tools tab
 tool(id PK, name UNIQUE, purpose, bonus, link, note, sort_order, is_active)
 
+-- transaction-level capture (v2 ledger, feeding the monthly grid)
+person(id PK, name UNIQUE, relation 'friend|family|colleague|other', contact,
+       color, note, sort_order, is_active)
+
+expense(id PK, spent_on DATE, merchant, note, category_id FK ON DELETE RESTRICT,
+        total_amount NUMERIC, my_share NUMERIC, is_split BOOL,
+        source 'receipt|manual', extraction JSON,
+        -- exactly what this row currently contributes to the grid, so an edit
+        -- or delete reverses itself instead of guessing:
+        applied_category_id, applied_year, applied_month, applied_amount)
+
+expense_share(id PK, expense_id FK CASCADE, person_id FK CASCADE,
+              amount NUMERIC, settled_at TIMESTAMP NULL,
+              UNIQUE(expense_id, person_id))
+
 -- free-form JSON preference store: appearance, currency, calendar, goals
 app_setting(key PK, value JSON, created_at, updated_at)
 ```
@@ -224,6 +239,37 @@ state, and input parsing for `1.2k`, `1,200`, `(450)`, `900+50`.
 - Drag-and-drop reordering (currently up/down controls)
 - Recurring-cost templates; multi-currency conversion (display currency is
   already a preference, but there is no FX conversion)
+
+## 12. Receipt capture & split tracking
+
+**The accounting rule, and it is not negotiable: only `my_share` reaches the
+monthly grid.** A ¥9,000 dinner split three ways posts ¥3,000 to the category
+cell; the other ¥6,000 is a receivable on `expense_share`. Settling a share
+marks `settled_at` and **changes no totals** — the money coming back was never
+your expense, so recording it as income would double-count.
+
+Each expense stores `applied_*` (category, year, month, amount). Edits and
+deletes reverse that exact posting before applying the new one, so changing the
+amount, the month, the category, or the split all stay consistent with the grid.
+Rounding on an equal split goes to the payer: everyone else's share is rounded
+and the user keeps the remainder, so the parts always sum to the total.
+
+**LLM integration (`app/services/receipts.py`):**
+- **Images only.** The user uploads a photo; there is no free-text path to the
+  model. Type is decided by **magic bytes**, not the `Content-Type` header
+  (`sniff_media_type`), capped at 4 MB, downscaled to 1800px in the browser.
+- Claude (`claude-opus-5`, override with `RECEIPT_MODEL`) via the official SDK,
+  using `messages.parse()` with a Pydantic schema — no hand-parsed JSON.
+- **Text inside an image is data, never instructions.** The system prompt says
+  so explicitly, and the schema-constrained output bounds the blast radius of a
+  receipt that tries prompt injection.
+- **Extraction never writes to the database.** It returns a draft plus
+  `warnings[]`; the user confirms in the UI. A suggested category is mapped back
+  to a real category id, never invented.
+- `stop_reason == "refusal"` and `max_tokens` are handled before reading
+  content; all SDK errors become one clean `ReceiptError` message.
+- No key configured → `/api/receipts/status` reports `enabled: false` and the UI
+  degrades to manual entry. The feature is optional, never required.
 
 ## 11. Customization (design rule)
 

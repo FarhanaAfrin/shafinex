@@ -10,7 +10,17 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
-from .routers import aggregates, auth, export, grid, networth, preferences, structure
+from .routers import (
+    aggregates,
+    auth,
+    expenses,
+    export,
+    grid,
+    networth,
+    preferences,
+    receipts,
+    structure,
+)
 
 settings = get_settings()
 
@@ -89,6 +99,8 @@ app.include_router(grid.router)
 app.include_router(networth.router)
 app.include_router(aggregates.router)
 app.include_router(preferences.router)
+app.include_router(expenses.router)
+app.include_router(receipts.router)
 app.include_router(export.router)
 
 

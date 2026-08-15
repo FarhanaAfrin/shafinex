@@ -6,6 +6,8 @@ const routes = [
   { path: '/', redirect: '/dashboard' },
   { path: '/dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue') },
   { path: '/sheet/:slug', name: 'sheet', component: () => import('@/views/SheetView.vue'), props: true },
+  { path: '/expenses', name: 'expenses', component: () => import('@/views/ExpensesView.vue') },
+  { path: '/people', name: 'people', component: () => import('@/views/PeopleView.vue') },
   { path: '/networth', name: 'networth', component: () => import('@/views/NetWorthView.vue') },
   { path: '/charts', name: 'charts', component: () => import('@/views/VisualizationView.vue') },
   { path: '/tools', name: 'tools', component: () => import('@/views/ToolsView.vue') },

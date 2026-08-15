@@ -66,6 +66,8 @@ const ACCENTS = [
 
 const SECTIONS = [
   { title: 'Dashboard', value: 'dashboard' },
+  { title: 'Expenses', value: 'expenses' },
+  { title: 'People', value: 'people' },
   { title: 'Sheets', value: 'sheets' },
   { title: 'Net worth', value: 'networth' },
   { title: 'Charts', value: 'visualization' },

@@ -1,5 +1,6 @@
 """Pydantic request/response shapes."""
 
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional, Literal
 
@@ -266,6 +267,123 @@ class ToolOut(ORMModel):
     note: Optional[str]
     sort_order: int
     is_active: bool
+
+
+# ---------------------------------------------------------------- people & expenses
+Relation = Literal["friend", "family", "colleague", "other"]
+
+
+class PersonCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    relation: Relation = "friend"
+    contact: Optional[str] = None
+    color: Optional[str] = None
+    note: Optional[str] = None
+
+
+class PersonUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    relation: Optional[Relation] = None
+    contact: Optional[str] = None
+    color: Optional[str] = None
+    note: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class PersonOut(ORMModel):
+    id: int
+    name: str
+    relation: Relation
+    contact: Optional[str]
+    color: Optional[str]
+    note: Optional[str]
+    sort_order: int
+    is_active: bool
+
+
+class PersonBalance(BaseModel):
+    person: PersonOut
+    owed: Decimal          # still outstanding
+    settled: Decimal       # already paid back
+    open_items: int
+
+
+class ShareIn(BaseModel):
+    person_id: int
+    amount: Decimal = Field(ge=0)
+
+
+class ShareOut(ORMModel):
+    id: int
+    person_id: int
+    person_name: str
+    amount: Decimal
+    settled_at: Optional[datetime]
+
+
+class ExpenseCreate(BaseModel):
+    spent_on: date
+    category_id: int
+    total_amount: Decimal = Field(gt=0)
+    merchant: Optional[str] = None
+    note: Optional[str] = None
+    is_split: bool = False
+    shares: list[ShareIn] = []
+    source: Literal["receipt", "manual"] = "manual"
+    extraction: Optional[dict] = None
+
+
+class ExpenseUpdate(BaseModel):
+    spent_on: Optional[date] = None
+    category_id: Optional[int] = None
+    total_amount: Optional[Decimal] = Field(default=None, gt=0)
+    merchant: Optional[str] = None
+    note: Optional[str] = None
+    is_split: Optional[bool] = None
+    shares: Optional[list[ShareIn]] = None
+
+
+class ExpenseOut(ORMModel):
+    id: int
+    spent_on: date
+    merchant: Optional[str]
+    note: Optional[str]
+    category_id: int
+    category_name: str
+    total_amount: Decimal
+    my_share: Decimal
+    is_split: bool
+    source: str
+    shares: list[ShareOut]
+
+
+# ---------------------------------------------------------------- receipts
+class ReceiptDraftShare(BaseModel):
+    person_id: Optional[int] = None
+    name: Optional[str] = None
+    amount: Decimal
+
+
+class ReceiptDraft(BaseModel):
+    """What the scan produced. Nothing is saved until the user confirms it."""
+
+    is_receipt: bool
+    merchant: Optional[str]
+    spent_on: Optional[date]
+    currency: Optional[str]
+    total: Optional[Decimal]
+    subtotal: Optional[Decimal]
+    tax: Optional[Decimal]
+    tip: Optional[Decimal]
+    payment_method: Optional[str]
+    line_items: list[dict]
+    suggested_category_id: Optional[int]
+    suggested_category_name: Optional[str]
+    likely_shared: bool
+    likely_people_count: Optional[int]
+    confidence: float
+    notes: Optional[str]
+    warnings: list[str] = []
 
 
 # ---------------------------------------------------------------- preferences

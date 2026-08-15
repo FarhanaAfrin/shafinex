@@ -23,6 +23,12 @@ const nav = computed(() => {
   if (session.sectionVisible('dashboard')) {
     items.push({ title: 'Dashboard', icon: 'mdi-view-dashboard-outline', to: { name: 'dashboard' } })
   }
+  if (session.sectionVisible('expenses')) {
+    items.push({ title: 'Expenses', icon: 'mdi-receipt-text-outline', to: { name: 'expenses' } })
+  }
+  if (session.sectionVisible('people')) {
+    items.push({ title: 'People', icon: 'mdi-account-group-outline', to: { name: 'people' } })
+  }
   if (session.sectionVisible('sheets')) {
     for (const sheet of structure.activeSheets) {
       items.push({

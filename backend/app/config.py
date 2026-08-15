@@ -30,6 +30,17 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # Receipt scanning. Leave the key unset to disable the feature entirely —
+    # the SDK also picks up ANTHROPIC_API_KEY from the environment on its own.
+    anthropic_api_key: str = ""
+    receipt_model: str = "claude-opus-5"
+
+    @property
+    def receipts_enabled(self) -> bool:
+        import os
+
+        return bool(self.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY"))
+
     @property
     def normalized_database_url(self) -> str:
         """Neon hands out `postgres://`; SQLAlchemy 2 wants an explicit driver."""

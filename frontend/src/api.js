@@ -87,6 +87,38 @@ export const api = {
   deleteTool: (id, hard = false) => client.delete(`/tools/${id}?hard=${hard}`),
   reorderTools: (ids) => client.post('/tools/reorder', { ids }),
 
+  // people & splits
+  people: (includeInactive = false) => client.get(`/people?include_inactive=${includeInactive}`),
+  createPerson: (payload) => client.post('/people', payload),
+  updatePerson: (id, payload) => client.patch(`/people/${id}`, payload),
+  deletePerson: (id, hard = false) => client.delete(`/people/${id}?hard=${hard}`),
+  balances: () => client.get('/people/balances'),
+  settleAll: (personId) => client.post(`/people/${personId}/settle-all`),
+  settleShare: (shareId, settled = true) =>
+    client.post(`/expenses/shares/${shareId}/settle?settled=${settled}`),
+
+  // expenses
+  expenses: (params = {}) => {
+    const query = new URLSearchParams(
+      Object.entries(params).filter(([, v]) => v !== null && v !== undefined && v !== ''),
+    ).toString()
+    return client.get(`/expenses${query ? `?${query}` : ''}`)
+  },
+  createExpense: (payload) => client.post('/expenses', payload),
+  updateExpense: (id, payload) => client.patch(`/expenses/${id}`, payload),
+  deleteExpense: (id) => client.delete(`/expenses/${id}`),
+
+  // receipt scanning
+  receiptsStatus: () => client.get('/receipts/status'),
+  scanReceipt: (file) => {
+    const form = new FormData()
+    form.append('image', file)
+    return client.post('/receipts/scan', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    })
+  },
+
   // aggregates & export
   aggregates: (year) => client.get(`/aggregates?year=${year}`),
   exportUrl: (year) => `/api/export?year=${year}`,

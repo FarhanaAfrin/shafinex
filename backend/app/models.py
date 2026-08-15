@@ -8,11 +8,12 @@ x kind) is fixed.
 
 from typing import Optional
 
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -132,6 +133,84 @@ class NetworthValue(Base, TimestampMixin):
     amount: Mapped[float] = mapped_column(Numeric(16, 2), nullable=False)
 
     item: Mapped[NetworthItem] = relationship(back_populates="values")
+
+
+class Person(Base, TimestampMixin):
+    """Someone you split expenses with — a friend, family member or colleague."""
+
+    __tablename__ = "person"
+    __table_args__ = (UniqueConstraint("name", name="uq_person_name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    # 'friend' | 'family' | 'colleague' | 'other'
+    relation: Mapped[str] = mapped_column(String(24), default="friend", nullable=False)
+    contact: Mapped[Optional[str]] = mapped_column(String(160), nullable=True)
+    color: Mapped[Optional[str]] = mapped_column(String(9), nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    shares: Mapped[list["ExpenseShare"]] = relationship(
+        back_populates="person", cascade="all, delete-orphan"
+    )
+
+
+class Expense(Base, TimestampMixin):
+    """A single transaction, usually captured from a receipt photo.
+
+    Only `my_share` reaches the monthly grid; what other people owe lives in
+    `shares` until it is settled. `applied_*` records exactly what was posted so
+    an edit or delete can reverse itself precisely.
+    """
+
+    __tablename__ = "expense"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    spent_on: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    merchant: Mapped[Optional[str]] = mapped_column(String(160), nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    category_id: Mapped[int] = mapped_column(
+        ForeignKey("category.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+
+    total_amount: Mapped[float] = mapped_column(Numeric(16, 2), nullable=False)
+    my_share: Mapped[float] = mapped_column(Numeric(16, 2), nullable=False)
+    is_split: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    source: Mapped[str] = mapped_column(String(16), default="manual", nullable=False)
+    extraction: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
+    # What this expense currently contributes to the grid.
+    applied_category_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    applied_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    applied_month: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    applied_amount: Mapped[Optional[float]] = mapped_column(Numeric(16, 2), nullable=True)
+
+    category: Mapped[Category] = relationship()
+    shares: Mapped[list["ExpenseShare"]] = relationship(
+        back_populates="expense", cascade="all, delete-orphan"
+    )
+
+
+class ExpenseShare(Base, TimestampMixin):
+    """What one person owes you for one expense."""
+
+    __tablename__ = "expense_share"
+    __table_args__ = (UniqueConstraint("expense_id", "person_id", name="uq_share_expense_person"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    expense_id: Mapped[int] = mapped_column(
+        ForeignKey("expense.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    person_id: Mapped[int] = mapped_column(
+        ForeignKey("person.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    amount: Mapped[float] = mapped_column(Numeric(16, 2), nullable=False)
+    settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    expense: Mapped[Expense] = relationship(back_populates="shares")
+    person: Mapped[Person] = relationship(back_populates="shares")
 
 
 class Tool(Base, TimestampMixin):

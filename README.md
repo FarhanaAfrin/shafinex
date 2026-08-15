@@ -130,6 +130,35 @@ Four starter templates ship with it; `default` is aimed at 25–40 year olds
 (salary plus side income, rent or mortgage, subscriptions, student loans,
 investment contributions, retirement accounts and crypto in net worth).
 
+## Receipts, splits and who owes you
+
+Photograph a receipt and Claude reads the merchant, date, total and line items,
+and suggests one of *your* categories. Nothing is saved until you check it.
+
+Then say whether it was **just you** or **split**. Only your share goes into the
+budget — the rest is tracked as money owed to you:
+
+> A ¥9,000 dinner split three ways → **¥3,000** lands in Eating out,
+> **¥6,000** is owed to you by the two friends.
+
+When they pay you back, tap **Settle up**. That clears the debt and deliberately
+changes no totals: the money returning was your own spending coming back, not
+income, so counting it would inflate both sides. The People page groups what
+you're owed by friends, family and colleagues.
+
+Editing an expense later — a different amount, month, category, or split —
+reverses exactly what it previously posted and re-posts the new figure, so the
+grid never drifts.
+
+**Turning it on** is optional. Set `ANTHROPIC_API_KEY` in `backend/.env` (get one
+at [console.anthropic.com](https://console.anthropic.com)) and restart. Without a
+key the Expenses page still works, you just type the amounts in. Override the
+model with `RECEIPT_MODEL` if you want a cheaper one for high volume.
+
+Only images are accepted, and the type is decided by inspecting the file's bytes
+rather than trusting its label. Photos are downscaled in the browser before
+upload, so a 12 MB phone snap costs the same as a small one.
+
 ## Entering amounts
 
 Seeding sets up the *structure* — sheets, categories, net-worth items, tools.

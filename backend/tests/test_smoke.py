@@ -208,6 +208,116 @@ check("Tools tab uses the workbook's headers", [c.value for c in wb["Tools"][1]]
       ["Sl.", "Tools to use", "Purpose", "Referral Bonus", "Referral Link or code"],
       str([c.value for c in wb["Tools"][1]]))
 
+print("\npeople and split expenses")
+res = client.post("/api/people", headers=H, json={"name": "Riko", "relation": "friend"})
+check("creates a person", res.status_code == 201, res.text)
+riko = res.json()
+colleague = client.post("/api/people", headers=H, json={"name": "Dan", "relation": "colleague"}).json()
+check("rejects duplicate person names", client.post("/api/people", headers=H, json={"name": "Riko"}).status_code == 409)
+
+dining = next(
+    c for c in client.get(f"/api/categories?sheet={spend['slug']}", headers=H).json()
+    if c["name"] == "Dining out"
+)
+
+
+def cell(category_id, year, month):
+    grid = client.get(f"/api/grid?sheet={spend['slug']}&year={year}", headers=H).json()
+    row = next((r for r in grid["rows"] if r["category_id"] == category_id), None)
+    if row is None:
+        return None
+    column = next((m for m in grid["months"] if m["year"] == year and m["month"] == month), None)
+    return row["cells"][column["index"]] if column else None
+
+
+# individual expense: the whole amount is mine
+res = client.post("/api/expenses", headers=H, json={
+    "spent_on": f"{YEAR}-05-04", "category_id": dining["id"], "total_amount": 2000,
+    "merchant": "Solo lunch", "is_split": False,
+})
+check("creates an individual expense", res.status_code == 201, res.text)
+solo = res.json()
+check("individual: my share is the full total", float(solo["my_share"]) == 2000.0, str(solo["my_share"]))
+check("individual: posts full amount to the grid", float(cell(dining["id"], YEAR, 5)) == 2000.0, str(cell(dining["id"], YEAR, 5)))
+
+# split expense: only my share hits the grid
+res = client.post("/api/expenses", headers=H, json={
+    "spent_on": f"{YEAR}-05-11", "category_id": dining["id"], "total_amount": 9000,
+    "merchant": "Group dinner", "is_split": True,
+    "shares": [{"person_id": riko["id"], "amount": 3000}, {"person_id": colleague["id"], "amount": 3000}],
+})
+check("creates a split expense", res.status_code == 201, res.text)
+split = res.json()
+check("split: my share is total minus others", float(split["my_share"]) == 3000.0, str(split["my_share"]))
+check("split: grid gets only my share", float(cell(dining["id"], YEAR, 5)) == 5000.0, str(cell(dining["id"], YEAR, 5)))
+check("split: records one share per person", len(split["shares"]) == 2, str(len(split["shares"])))
+check(
+    "rejects shares exceeding the total",
+    client.post("/api/expenses", headers=H, json={
+        "spent_on": f"{YEAR}-05-12", "category_id": dining["id"], "total_amount": 100,
+        "is_split": True, "shares": [{"person_id": riko["id"], "amount": 500}],
+    }).status_code == 400,
+)
+
+print("\nwho owes me what")
+balances = {b["person"]["name"]: b for b in client.get("/api/people/balances", headers=H).json()}
+check("tracks what a friend owes", float(balances["Riko"]["owed"]) == 3000.0, str(balances["Riko"]["owed"]))
+check("tracks what a colleague owes", float(balances["Dan"]["owed"]) == 3000.0, str(balances["Dan"]["owed"]))
+
+riko_share = next(s for s in split["shares"] if s["person_id"] == riko["id"])
+res = client.post(f"/api/expenses/shares/{riko_share['id']}/settle", headers=H)
+check("settles one share", res.status_code == 200, res.text)
+balances = {b["person"]["name"]: b for b in client.get("/api/people/balances", headers=H).json()}
+check("settled share clears the debt", float(balances["Riko"]["owed"]) == 0.0, str(balances["Riko"]["owed"]))
+check("settled amount is remembered", float(balances["Riko"]["settled"]) == 3000.0, str(balances["Riko"]["settled"]))
+check("settling does NOT change the expense total", float(cell(dining["id"], YEAR, 5)) == 5000.0, str(cell(dining["id"], YEAR, 5)))
+
+print("\nediting an expense reverses cleanly")
+res = client.patch(f"/api/expenses/{split['id']}", headers=H, json={"total_amount": 12000})
+check("raises the total", res.status_code == 200, res.text)
+check("my share absorbs the increase", float(res.json()["my_share"]) == 6000.0, str(res.json()["my_share"]))
+check("grid follows the new share", float(cell(dining["id"], YEAR, 5)) == 8000.0, str(cell(dining["id"], YEAR, 5)))
+
+res = client.patch(f"/api/expenses/{split['id']}", headers=H, json={"spent_on": f"{YEAR}-06-02"})
+check("moving months empties the old cell", float(cell(dining["id"], YEAR, 5)) == 2000.0, str(cell(dining["id"], YEAR, 5)))
+check("moving months fills the new cell", float(cell(dining["id"], YEAR, 6)) == 6000.0, str(cell(dining["id"], YEAR, 6)))
+
+groceries = next(
+    c for c in client.get(f"/api/categories?sheet={spend['slug']}", headers=H).json()
+    if c["name"] == "Groceries"
+)
+client.patch(f"/api/expenses/{split['id']}", headers=H, json={"category_id": groceries["id"]})
+check("recategorising moves the amount", float(cell(groceries["id"], YEAR, 6)) == 6000.0, str(cell(groceries["id"], YEAR, 6)))
+check("old category is left clean", cell(dining["id"], YEAR, 6) is None, str(cell(dining["id"], YEAR, 6)))
+
+client.patch(f"/api/expenses/{split['id']}", headers=H, json={"is_split": False, "shares": []})
+check("un-splitting gives me the whole amount", float(cell(groceries["id"], YEAR, 6)) == 12000.0, str(cell(groceries["id"], YEAR, 6)))
+
+check("deletes an expense", client.delete(f"/api/expenses/{split['id']}", headers=H).status_code == 204)
+check("deleting reverses its posting", cell(groceries["id"], YEAR, 6) is None, str(cell(groceries["id"], YEAR, 6)))
+check("unrelated expenses are untouched", float(cell(dining["id"], YEAR, 5)) == 2000.0, str(cell(dining["id"], YEAR, 5)))
+check(
+    "refuses to hard-delete someone who still owes you",
+    client.delete(f"/api/people/{colleague['id']}?hard=true", headers=H).status_code in (204, 409),
+)
+
+print("\nreceipt scanning guardrails")
+status_body = client.get("/api/receipts/status", headers=H).json()
+check("reports whether scanning is configured", "enabled" in status_body, str(status_body))
+res = client.post("/api/receipts/scan", headers=H, files={"image": ("notes.txt", b"totally not an image", "image/png")})
+check("rejects a non-image disguised as one", res.status_code in (415, 503), f"{res.status_code} {res.text[:120]}")
+res = client.post("/api/receipts/scan", headers=H, files={"image": ("empty.png", b"", "image/png")})
+check("rejects an empty upload", res.status_code in (400, 503), str(res.status_code))
+check("scan requires authentication", client.post("/api/receipts/scan", files={"image": ("a.png", b"\x89PNG\r\n\x1a\n", "image/png")}).status_code == 401)
+
+from app.services.receipts import sniff_media_type as _sniff  # noqa: E402
+
+check("sniffs PNG by content", _sniff(b"\x89PNG\r\n\x1a\nrest") == "image/png")
+check("sniffs JPEG by content", _sniff(b"\xff\xd8\xff\xe0rest") == "image/jpeg")
+check("sniffs WebP by content", _sniff(b"RIFF\x00\x00\x00\x00WEBPVP8 ") == "image/webp")
+check("refuses a PDF", _sniff(b"%PDF-1.7") is None)
+check("refuses a script", _sniff(b"#!/bin/sh\nrm -rf /") is None)
+
 print("\nworkbook import (structure only by default)")
 from openpyxl import Workbook as _Workbook  # noqa: E402
 from sqlalchemy import select  # noqa: E402

@@ -60,8 +60,12 @@ DEFAULT_PREFERENCES: dict = {
     },
     # Navigation: users can hide sections they don't use
     "visible_sections": [
-        "dashboard", "sheets", "networth", "visualization", "tools", "export", "settings",
+        "dashboard", "expenses", "people", "sheets", "networth",
+        "visualization", "tools", "export", "settings",
     ],
+    # Split defaults
+    "default_split_mode": "equal",   # equal | custom
+    "include_me_in_split": True,
 }
 
 
