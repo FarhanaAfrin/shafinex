@@ -1,0 +1,22 @@
+# One free web service that serves both the API and the built Vue app.
+# Create the Postgres database on Neon and paste its URL into DATABASE_URL.
+services:
+  - type: web
+    name: shahfinex
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: ./build.sh
+    startCommand: cd backend && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: DATABASE_URL
+        sync: false # paste the Neon connection string (sslmode=require)
+      - key: APP_PASSWORD
+        sync: false # the password you sign in with
+      - key: SECRET_KEY
+        generateValue: true
+      - key: LOG_LEVEL
+        value: INFO

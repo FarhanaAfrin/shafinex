@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+backend/local.db
+backend/.env
+
+# Node
+node_modules/
+frontend/dist/
+npm-debug.log*
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+
+# The source workbook is Stat with SHAH's copyrighted file — personal use only,
+# never redistribute it (CLAUDE.md §10). Keep it out of the repo.
+*.xlsx
