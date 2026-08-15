@@ -110,17 +110,42 @@ def health():
 
 
 # ---------------------------------------------------------------- SPA hosting
+#
+# Caching here is not an optimization, it is a correctness requirement.
+# Vite fingerprints every asset (`LoginView-Dj_8Zhgp.js`), so a redeploy changes
+# the filenames. A browser holding a cached index.html therefore asks for chunks
+# that no longer exist and the app dies on a blank screen — the mounted
+# StaticFiles answers a missing file with a plain-text "Not Found", which is why
+# the symptom shows up as a bogus `text/plain` MIME error on a .css request.
+#
+# So: fingerprinted assets are immutable and cached hard; index.html must always
+# be revalidated, because it is the map to which fingerprints are current.
+IMMUTABLE = "public, max-age=31536000, immutable"
+NO_CACHE = "no-cache, no-store, must-revalidate"
+
+
+class ImmutableStatic(StaticFiles):
+    """StaticFiles for content-hashed files: safe to cache forever."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = IMMUTABLE
+        return response
+
+
 dist = settings.static_dir
 if dist.exists():
-    app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
+    app.mount("/assets", ImmutableStatic(directory=dist / "assets"), name="assets")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa(full_path: str):
         """Any non-API path falls through to index.html for client-side routing."""
         candidate = dist / full_path
         if full_path and candidate.is_file():
-            return FileResponse(candidate)
-        return FileResponse(dist / "index.html")
+            # Files outside /assets (favicon, robots.txt) are not fingerprinted,
+            # so they get revalidated rather than pinned for a year.
+            return FileResponse(candidate, headers={"Cache-Control": NO_CACHE})
+        return FileResponse(dist / "index.html", headers={"Cache-Control": NO_CACHE})
 
 else:
     log.warning("static dir %s not found — API only (run `npm run build` in frontend/)", dist)

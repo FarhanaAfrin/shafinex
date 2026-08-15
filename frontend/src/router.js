@@ -33,4 +33,21 @@ router.beforeEach(async (to) => {
   return true
 })
 
+// A tab open across a redeploy still holds the old index.html in memory, so a
+// lazily-imported view resolves to a filename the server no longer has and the
+// route silently fails to render. Reload once to pick up the new asset map;
+// the sessionStorage flag stops that turning into a refresh loop if the chunk
+// is genuinely missing rather than merely stale.
+const RELOADED = 'chunk-reload-attempted'
+
+router.onError((error, to) => {
+  const stale = /dynamically imported module|Importing a module script failed|Failed to fetch/i
+  if (!stale.test(error?.message || '')) return
+  if (sessionStorage.getItem(RELOADED)) return
+  sessionStorage.setItem(RELOADED, '1')
+  window.location.assign(to?.fullPath || window.location.pathname)
+})
+
+router.afterEach(() => sessionStorage.removeItem(RELOADED))
+
 export default router
