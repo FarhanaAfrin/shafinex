@@ -120,6 +120,47 @@ function cancelDraft() {
   preview.value = null
 }
 
+// ---------------------------------------------------------------- categories
+/**
+ * Sheet order puts long-lived commitments (mortgage, insurance) first, but
+ * day-to-day spending is what actually gets logged and split. Rather than
+ * hardcoding which categories those are — the whole point is that they are the
+ * user's to define (CLAUDE.md §11) — rank them by how often they have really
+ * been used, so travel, groceries and eating out rise on their own.
+ */
+const MOST_USED_LIMIT = 6
+
+const categoryItems = computed(() => {
+  const decorate = (c) => ({
+    title: c.name,
+    value: c.id,
+    subtitle: c.group_name || undefined,
+  })
+
+  const uses = new Map()
+  for (const expense of expenses.value) {
+    if (expense.category_id == null) continue
+    uses.set(expense.category_id, (uses.get(expense.category_id) || 0) + 1)
+  }
+
+  const top = categories.value
+    .filter((c) => uses.has(c.id))
+    .sort((a, b) => uses.get(b.id) - uses.get(a.id) || a.name.localeCompare(b.name))
+    .slice(0, MOST_USED_LIMIT)
+
+  // Nothing logged yet, so there is no usage to rank on — keep the plain list
+  // rather than inventing an order.
+  if (!top.length) return categories.value.map(decorate)
+
+  const promoted = new Set(top.map((c) => c.id))
+  return [
+    { type: 'subheader', title: 'Most used' },
+    ...top.map(decorate),
+    { type: 'subheader', title: 'All categories' },
+    ...categories.value.filter((c) => !promoted.has(c.id)).map(decorate),
+  ]
+})
+
 // ---------------------------------------------------------------- split maths
 const total = computed(() => Number(parseAmount(form.value?.total_amount) || 0))
 
@@ -352,15 +393,20 @@ const personName = (id) => people.value.find((p) => p.id === id)?.name || ''
                 persistent-hint
               />
             </v-col>
-            <v-col cols="12" sm="6">
-              <v-select
-                v-model="form.category_id"
-                :items="categories.map((c) => ({ title: c.name, value: c.id }))"
-                label="Category"
-                :error-messages="form.category_id ? '' : 'Pick a category'"
-              />
-            </v-col>
           </v-row>
+
+          <!-- Full width and searchable: there are far too many categories to
+               scroll, and the ones that get split are rarely near the top of
+               the sheet order. -->
+          <v-autocomplete
+            v-model="form.category_id"
+            :items="categoryItems"
+            label="Category"
+            placeholder="Type to search — travel, food, groceries…"
+            auto-select-first
+            :menu-props="{ maxHeight: 420 }"
+            :error-messages="form.category_id ? '' : 'Pick a category'"
+          />
 
           <v-divider class="my-4" />
 
