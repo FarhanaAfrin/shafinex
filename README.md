@@ -49,17 +49,62 @@ aggregates, preferences and export):
 cd backend && .venv/bin/pip install httpx && .venv/bin/python -m tests.test_smoke
 ```
 
-## Deploy (Neon + Render, free tiers)
+## Deploy publicly (Render + Neon, both free)
 
-1. Create a Neon Postgres database, copy the connection string.
-2. Push this repo to GitHub, then in Render: **New → Blueprint**, pick the repo
-   (`render.yaml` is already here).
-3. Set `DATABASE_URL` (Neon) and `APP_PASSWORD`. `SECRET_KEY` is generated for you.
-4. First deploy runs `alembic upgrade head` automatically. Load starter categories
-   from **Settings → Data → Starter templates**.
+You get one public HTTPS URL, running with your laptop off. Three free accounts:
+[GitHub](https://github.com), [Neon](https://neon.tech), [Render](https://render.com).
 
-Render's free tier sleeps after ~15 minutes idle, so the first request after a
-break takes 30–60 seconds. Neon scales to zero as well.
+**1. Database — Neon.** Create a project, copy the connection string
+(`postgresql://…?sslmode=require`). This must be Postgres, not SQLite: Render's
+free tier has no persistent disk, so a SQLite file is wiped on every restart and
+redeploy.
+
+**2. Code — GitHub.** The repo is committed already; create an empty repo on
+GitHub (no README/licence), then:
+
+```bash
+cd /Users/farhana.afrin/Documents/Shahfinex
+git remote add origin https://github.com/<you>/shahfinex.git
+git push -u origin main
+```
+
+The workbook, `backend/.env` and `backend/local.db` are gitignored, so your
+password and your actual figures stay on your machine.
+
+**3. Service — Render.** **New → Blueprint** → pick the repo. `render.yaml` sets
+everything up; you supply two values:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | the Neon string from step 1 |
+| `APP_PASSWORD` | a long, unique password — it is the only thing guarding your finances |
+
+`SECRET_KEY` is generated for you. First deploy runs `alembic upgrade head`
+automatically, so the tables exist before the app serves anything.
+
+**4. Seed it.** The free tier has no shell and no one-off jobs, so run the import
+from your Mac against the hosted database:
+
+```bash
+cd backend
+DATABASE_URL="postgresql://…?sslmode=require" \
+  .venv/bin/python -m app.import_workbook "../Personal Finance Tracker - Stat with SHAH.xlsx" --year 2026
+```
+
+Or skip that and use **Settings → Data → Starter templates** in the app itself.
+Either way you then enter amounts through the UI as usual.
+
+### What "free" actually means here
+
+- **It sleeps.** After ~15 minutes idle the service spins down; the next request
+  takes 30–60 seconds to wake it. Neon scales to zero too, so a cold start can
+  stack. Fine for a tracker you open a few times a month.
+- **750 instance hours/month**, enough for one service running continuously.
+- **No persistent disk, no shell, no one-off jobs** — hence Neon for storage,
+  migrations at startup, and seeding from your machine.
+- **HTTPS and the certificate are handled** by Render.
+
+Upgrading the web service to $7/month removes the sleep, if the wait annoys you.
 
 ---
 

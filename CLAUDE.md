@@ -188,7 +188,16 @@ state, and input parsing for `1.2k`, `1,200`, `(450)`, `900+50`.
 - **Backup:** monthly ritual = press the Export button (full .xlsx download).
 - **Logging:** Python `logging` to stdout (visible in Render dashboard);
   log every write with payload.
-- **Migrations:** Alembic for every schema change.
+- **Migrations:** Alembic for every schema change. They run in Render's
+  `startCommand`, because the free tier has **no shell and no one-off jobs** —
+  there is no way to run them by hand after deploying.
+- **Free-tier constraints (decided, do not re-litigate):** no persistent disk, so
+  Postgres (Neon) is mandatory in production — the SQLite fallback is local-dev
+  only and `app/main.py` logs a loud error if it is ever used on a hosted
+  platform. Seeding a deployed instance is done from a dev machine by pointing
+  `DATABASE_URL` at Neon, or from Settings → Data in the app.
+- **Public exposure:** `APP_PASSWORD` is the only thing between the internet and
+  the user's finances. Startup checks warn on weak passwords and example secrets.
 - **Local dev:** same stack locally — `uvicorn` + `npm run dev` (Vite proxy to API),
   local Postgres or Neon dev branch.
 - **Seeding:** `python -m app.import_workbook "<workbook>.xlsx" [--year Y] [--replace]
