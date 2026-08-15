@@ -2,7 +2,7 @@
 # Create the Postgres database on Neon and paste its URL into DATABASE_URL.
 services:
   - type: web
-    name: shahfinex
+    name: shafinex
     runtime: python
     plan: free
     region: oregon
@@ -18,5 +18,9 @@ services:
         sync: false # the password you sign in with
       - key: SECRET_KEY
         generateValue: true
+      # Optional: receipt scanning. Leave blank and the Expenses page still
+      # works — it just falls back to entering amounts by hand.
+      - key: ANTHROPIC_API_KEY
+        sync: false
       - key: LOG_LEVEL
         value: INFO
